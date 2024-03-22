@@ -1,14 +1,6 @@
 import warehouse from 'warehouse';
 import { moment, toMomentLocale } from '../../plugins/helper/date';
 
-// It'll pollute the moment module.
-// declare module 'moment' {
-//   export default interface Moment extends moment.Moment {
-//     _d: Date;
-//   // eslint-disable-next-line semi
-//   }
-// }
-
 class SchemaTypeMoment extends warehouse.SchemaType<moment.Moment> {
   public options: any;
 

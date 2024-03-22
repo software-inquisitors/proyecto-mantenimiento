@@ -218,28 +218,20 @@ export interface AssetGenerator {
   }
 }
 
-export type SimplePostGenerator = {
+export interface SimpleGenerator {
   path: string;
   data: string;
 }
-export type NormalPostGenerator = {
+
+export interface NormalGenerator<TData> {
   path: string;
   layout: string[];
-  data: PostSchema;
+  data: TData;
 }
-export type PostGenerator = SimplePostGenerator | NormalPostGenerator;
 
+export type PostGenerator = SimpleGenerator | NormalGenerator<PostSchema>;
 
-export type SimplePageGenerator = {
-  path: string;
-  data: string;
-}
-export type NormalPageGenerator = {
-  path: string;
-  layout: string[];
-  data: PageSchema;
-}
-export type PageGenerator = SimplePageGenerator | NormalPageGenerator;
+export type PageGenerator = SimpleGenerator | NormalGenerator<PageSchema>;
 
 export interface SiteLocals {
   posts: Query<PostSchema>; // _Query

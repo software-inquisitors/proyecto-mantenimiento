@@ -56,6 +56,12 @@ class Render {
     return this.getRenderer(ext, true);
   }
 
+  /**
+ * Función asíncrona que renderiza datos de entrada y devuelve una promesa que se resuelve con el resultado renderizado.
+ * @param data Objeto que contiene los datos de entrada para la renderización, como texto o la ruta de un archivo.
+ * @param options Objeto opcional que especifica opciones adicionales para la renderización, como resaltado de sintaxis.
+ * @param callback Función opcional que se llama cuando la renderización asíncrona se completa.
+ */
   render(data: StoreFunctionData, options?: { highlight?: boolean; }, callback?: NodeJSLikeCallback<any>): Promise<any> {
     if (!callback && typeof options === 'function') {
       callback = options;
@@ -100,6 +106,11 @@ class Render {
     }).asCallback(callback);
   }
 
+  /**
+ * Función síncrona que renderiza datos de entrada y devuelve el resultado renderizado.
+ * @param data Objeto que contiene los datos de entrada para la renderización de manera síncrona, como texto o la ruta de un archivo.
+ * @param options Objeto opcional que especifica opciones adicionales para la renderización.
+ */
   renderSync(data: StoreFunctionData, options = {}): any {
     if (!data) throw new TypeError('No input file or string!');
 
