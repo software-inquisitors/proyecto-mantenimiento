@@ -2,7 +2,7 @@ import archy from 'archy';
 import type Hexo from '../../../hexo';
 
 function listRoute(this: Hexo): void {
-  const routes = this.route.list().sort();
+  const routes = this.route.list().sort((a: string, b: string) => a.localeCompare(b));
   const tree = buildTree(routes);
   const nodes = buildNodes(tree);
 
