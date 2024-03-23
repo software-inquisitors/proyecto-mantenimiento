@@ -30,6 +30,13 @@ const isNonWhiteSpaceChar = (char: string) => char !== '\r'
   && char !== '\v'
   && char !== ' ';
 
+enum State {
+  PLAINTEXT,
+  SWIG_VAR,
+  SWIG_COMMENT,
+  SWIG_TAG,
+}
+
 class PostRenderEscape {
   public stored: any[];
   public length: number;
@@ -69,126 +76,89 @@ class PostRenderEscape {
    * @returns string
    */
   escapeAllSwigTags(str: string) {
-    if (!/(\{\{.+?\}\})|(\{#.+?#\})|(\{%.+?%\})/s.test(str)) {
+    const swigTagRegex = /\{[^{}]+\}|\{#[^\}\#]+\}|\{%[^\%]+\}%/g;
+
+    if (!swigTagRegex.test(str)) {
       return str;
     }
-    let state = STATE_PLAINTEXT;
-    let buffer = '';
-    let output = '';
 
-    let swig_tag_name_begin = false;
-    let swig_tag_name_end = false;
-    let swig_tag_name = '';
-    let swig_full_tag_start_buffer = '';
+    const output = [];
+    let currentState = State.PLAINTEXT;
+    let currentBuffer = '';
 
-    const { length } = str;
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      const nextChar = str[i + 1];
 
-    for (let idx = 0; idx < length; idx++) {
-      const char = str[idx];
-      const next_char = str[idx + 1];
-
-      if (state === STATE_PLAINTEXT) { // From plain text to swig
-        if (char === '{') {
-          // check if it is a complete tag {{ }}
-          if (next_char === '{') {
-            state = STATE_SWIG_VAR;
-            idx++;
-          } else if (next_char === '#') {
-            state = STATE_SWIG_COMMENT;
-            idx++;
-          } else if (next_char === '%') {
-            state = STATE_SWIG_TAG;
-            idx++;
-            swig_tag_name = '';
-            swig_full_tag_start_buffer = '';
-            swig_tag_name_begin = false; // Mark if it is the first non white space char in the swig tag
-            swig_tag_name_end = false;
-          } else {
-            output += char;
-          }
-        } else {
-          output += char;
-        }
-      } else if (state === STATE_SWIG_TAG) {
-        if (char === '%' && next_char === '}') { // From swig back to plain text
-          idx++;
-          if (swig_tag_name !== '' && str.includes(`end${swig_tag_name}`)) {
-            state = STATE_SWIG_FULL_TAG;
-          } else {
-            swig_tag_name = '';
-            state = STATE_PLAINTEXT;
-            output += PostRenderEscape.escapeContent(this.stored, 'swig', `{%${buffer}%}`);
-          }
-
-          buffer = '';
-        } else {
-          buffer = buffer + char;
-          swig_full_tag_start_buffer = swig_full_tag_start_buffer + char;
-
-          if (isNonWhiteSpaceChar(char)) {
-            if (!swig_tag_name_begin && !swig_tag_name_end) {
-              swig_tag_name_begin = true;
-            }
-
-            if (swig_tag_name_begin) {
-              swig_tag_name += char;
+      switch (currentState) {
+        case State.PLAINTEXT:
+          if (char === '{') {
+            if (nextChar === '{') {
+              currentState = State.SWIG_VAR;
+              i++;
+            } else if (nextChar === '#') {
+              currentState = State.SWIG_COMMENT;
+              i++;
+            } else if (nextChar === '%') {
+              currentState = State.SWIG_TAG;
+              i++;
+              currentBuffer = '';
+            } else {
+              output.push(char);
             }
           } else {
-            if (swig_tag_name_begin === true) {
-              swig_tag_name_begin = false;
-              swig_tag_name_end = true;
-            }
+            output.push(char);
           }
-        }
-      } else if (state === STATE_SWIG_VAR) {
-        if (char === '}' && next_char === '}') {
-          idx++;
-          state = STATE_PLAINTEXT;
-          output += PostRenderEscape.escapeContent(this.stored, 'swig', `{{${buffer}}}`);
-          buffer = '';
-        } else {
-          buffer = buffer + char;
-        }
-      } else if (state === STATE_SWIG_COMMENT) { // From swig back to plain text
-        if (char === '#' && next_char === '}') {
-          idx++;
-          state = STATE_PLAINTEXT;
-          buffer = '';
-        }
-      } else if (state === STATE_SWIG_FULL_TAG) {
-        if (char === '{' && next_char === '%') {
-          let swig_full_tag_end_buffer = '';
-
-          let _idx = idx + 2;
-          for (; _idx < length; _idx++) {
-            const _char = str[_idx];
-            const _next_char = str[_idx + 1];
-
-            if (_char === '%' && _next_char === '}') {
-              _idx++;
-              break;
-            }
-
-            swig_full_tag_end_buffer = swig_full_tag_end_buffer + _char;
-          }
-
-          if (swig_full_tag_end_buffer.includes(`end${swig_tag_name}`)) {
-            state = STATE_PLAINTEXT;
-            output += PostRenderEscape.escapeContent(this.stored, 'swig', `{%${swig_full_tag_start_buffer}%}${buffer}{%${swig_full_tag_end_buffer}%}`);
-            idx = _idx;
-            swig_full_tag_start_buffer = '';
-            swig_full_tag_end_buffer = '';
-            buffer = '';
+          break;
+        case State.SWIG_VAR:
+          if (char === '}' && nextChar === '}') {
+            i++;
+            currentState = State.PLAINTEXT;
+            output.push(PostRenderEscape.escapeContent(this.stored, 'swig', `{{${currentBuffer}}}`));
+            currentBuffer = '';
           } else {
-            buffer += char;
+            currentBuffer += char;
           }
-        } else {
-          buffer += char;
-        }
+          break;
+        case State.SWIG_COMMENT:
+          if (char === '#' && nextChar === '}') {
+            i++;
+            currentState = State.PLAINTEXT;
+            currentBuffer = '';
+          }
+          break;
+        case State.SWIG_TAG:
+          if (char === '%' && nextChar === '}') {
+            i++;
+            currentState = State.PLAINTEXT;
+            const isFullTag = str.includes(`end${currentBuffer}`);
+            if (isFullTag) {
+              output.push(
+                PostRenderEscape.escapeContent(
+                  this.stored,
+                  'swig',
+                  `{%${currentBuffer}%}`
+                )
+              );
+            } else {
+              output.push(
+                PostRenderEscape.escapeContent(
+                  this.stored,
+                  'swig',
+                  `{%${currentBuffer}%}`
+                )
+              );
+            }
+            currentBuffer = '';
+          } else {
+            currentBuffer += char;
+          }
+          break;
+        default:
+          throw new Error('Unexpected state in escapeAllSwigTags');
       }
     }
-
-    return output;
+    return output.join('');
   }
 }
 
@@ -200,8 +170,8 @@ const prepareFrontMatter = (data: any, jsonMode: boolean) => {
       data[key] = moment.utc(item).format('YYYY-MM-DD HH:mm:ss');
     } else if (typeof item === 'string') {
       if (jsonMode || item.includes(':') || item.startsWith('#') || item.startsWith('!!')
-      || item.includes('{') || item.includes('}') || item.includes('[') || item.includes(']')
-      || item.includes('\'') || item.includes('"')) data[key] = `"${item.replace(/"/g, '\\"')}"`;
+        || item.includes('{') || item.includes('}') || item.includes('[') || item.includes(']')
+        || item.includes('\'') || item.includes('"')) data[key] = `"${item.replace(/"/g, '\\"')}"`;
     }
   }
 
